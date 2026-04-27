@@ -1,7 +1,6 @@
 """API de clima usando Open-Meteo (sin API key requerida)."""
 import httpx
 from fastapi import FastAPI, HTTPException, Query
-from typing import Optional
 
 app = FastAPI(
     title="FinTech Weather API",
@@ -72,6 +71,45 @@ def clima_actual(
     }
 
 
+@app.get("/clima/uv")
+def indice_uv(
+    latitud: float = Query(..., ge=-90, le=90),
+    longitud: float = Query(..., ge=-180, le=180),
+) -> dict:
+    """Retorna el índice UV actual y su nivel de riesgo."""
+    params = {
+        "latitude": latitud,
+        "longitude": longitud,
+        "current": "uv_index",
+        "timezone": "auto",
+    }
+    response = httpx.get(f"{BASE_URL}/forecast", params=params, timeout=10)
+    if response.status_code != 200:
+        raise HTTPException(status_code=502, detail="Error al consultar servicio de clima")
+
+    data = response.json()
+    uv = data.get("current", {}).get("uv_index", 0)
+
+    if uv < 3:
+        nivel = "Bajo"
+    elif uv < 6:
+        nivel = "Moderado"
+    elif uv < 8:
+        nivel = "Alto"
+    elif uv < 11:
+        nivel = "Muy alto"
+    else:
+        nivel = "Extremo"
+
+    return {
+        "latitud": latitud,
+        "longitud": longitud,
+        "uv_index": uv,
+        "nivel_riesgo": nivel,
+        "hora": data.get("current", {}).get("time"),
+    }
+
+
 @app.get("/clima/pronostico")
 def pronostico(
     latitud: float = Query(..., ge=-90, le=90),
@@ -97,19 +135,17 @@ def pronostico(
     tmin = daily.get("temperature_2m_min", [])
     codigos = daily.get("weathercode", [])
 
-    pronostico_list = [
-        {
-            "fecha": fechas[i],
-            "temp_max_c": tmax[i],
-            "temp_min_c": tmin[i],
-            "condicion": WMO_CODES.get(codigos[i], "Desconocido"),
-        }
-        for i in range(len(fechas))
-    ]
-
     return {
         "latitud": latitud,
         "longitud": longitud,
         "zona_horaria": data.get("timezone"),
-        "pronostico": pronostico_list,
+        "pronostico": [
+            {
+                "fecha": fechas[i],
+                "temp_max_c": tmax[i],
+                "temp_min_c": tmin[i],
+                "condicion": WMO_CODES.get(codigos[i], "Desconocido"),
+            }
+            for i in range(len(fechas))
+        ],
     }
