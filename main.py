@@ -1,7 +1,6 @@
 """API de clima usando Open-Meteo (sin API key requerida)."""
 import httpx
 from fastapi import FastAPI, HTTPException, Query
-from typing import Optional
 
 app = FastAPI(
     title="FinTech Weather API",
@@ -72,6 +71,28 @@ def clima_actual(
     }
 
 
+@app.get("/clima/alerta-viento")
+def alerta_viento(
+    latitud: float = Query(..., ge=-90, le=90),
+    longitud: float = Query(..., ge=-180, le=180),
+    umbral_kmh: float = Query(default=50.0, ge=0, description="Umbral en km/h para activar alerta"),
+) -> dict:
+    """Retorna alerta si la velocidad del viento supera el umbral configurado."""
+    resultado = clima_actual(latitud=latitud, longitud=longitud)
+    viento = resultado.get("viento_kmh") or 0.0
+    activa = viento >= umbral_kmh
+    return {
+        **resultado,
+        "umbral_kmh": umbral_kmh,
+        "alerta_activa": activa,
+        "mensaje": (
+            f"ALERTA: viento de {viento} km/h supera el umbral de {umbral_kmh} km/h"
+            if activa
+            else f"Sin alerta. Viento actual: {viento} km/h"
+        ),
+    }
+
+
 @app.get("/clima/pronostico")
 def pronostico(
     latitud: float = Query(..., ge=-90, le=90),
@@ -97,19 +118,17 @@ def pronostico(
     tmin = daily.get("temperature_2m_min", [])
     codigos = daily.get("weathercode", [])
 
-    pronostico_list = [
-        {
-            "fecha": fechas[i],
-            "temp_max_c": tmax[i],
-            "temp_min_c": tmin[i],
-            "condicion": WMO_CODES.get(codigos[i], "Desconocido"),
-        }
-        for i in range(len(fechas))
-    ]
-
     return {
         "latitud": latitud,
         "longitud": longitud,
         "zona_horaria": data.get("timezone"),
-        "pronostico": pronostico_list,
+        "pronostico": [
+            {
+                "fecha": fechas[i],
+                "temp_max_c": tmax[i],
+                "temp_min_c": tmin[i],
+                "condicion": WMO_CODES.get(codigos[i], "Desconocido"),
+            }
+            for i in range(len(fechas))
+        ],
     }
