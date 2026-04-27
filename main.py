@@ -71,6 +71,18 @@ def clima_actual(
     }
 
 
+@app.get("/clima/actual/fahrenheit")
+def clima_actual_fahrenheit(
+    latitud: float = Query(..., ge=-90, le=90),
+    longitud: float = Query(..., ge=-180, le=180),
+) -> dict:
+    """Retorna el clima actual con temperatura en grados Fahrenheit."""
+    resultado = clima_actual(latitud=latitud, longitud=longitud)
+    temp_c = resultado["temperatura_c"]
+    resultado["temperatura_f"] = round((temp_c * 9 / 5) + 32, 1) if temp_c is not None else None
+    return resultado
+
+
 @app.get("/clima/uv")
 def indice_uv(
     latitud: float = Query(..., ge=-90, le=90),
