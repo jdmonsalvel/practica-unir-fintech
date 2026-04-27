@@ -1,7 +1,6 @@
 """API de clima usando Open-Meteo (sin API key requerida)."""
 import httpx
 from fastapi import FastAPI, HTTPException, Query
-from typing import Optional
 
 app = FastAPI(
     title="FinTech Weather API",
@@ -72,6 +71,18 @@ def clima_actual(
     }
 
 
+@app.get("/clima/actual/fahrenheit")
+def clima_actual_fahrenheit(
+    latitud: float = Query(..., ge=-90, le=90),
+    longitud: float = Query(..., ge=-180, le=180),
+) -> dict:
+    """Retorna el clima actual con temperatura en grados Fahrenheit."""
+    resultado = clima_actual(latitud=latitud, longitud=longitud)
+    temp_c = resultado["temperatura_c"]
+    resultado["temperatura_f"] = round((temp_c * 9 / 5) + 32, 1) if temp_c is not None else None
+    return resultado
+
+
 @app.get("/clima/pronostico")
 def pronostico(
     latitud: float = Query(..., ge=-90, le=90),
@@ -97,19 +108,17 @@ def pronostico(
     tmin = daily.get("temperature_2m_min", [])
     codigos = daily.get("weathercode", [])
 
-    pronostico_list = [
-        {
-            "fecha": fechas[i],
-            "temp_max_c": tmax[i],
-            "temp_min_c": tmin[i],
-            "condicion": WMO_CODES.get(codigos[i], "Desconocido"),
-        }
-        for i in range(len(fechas))
-    ]
-
     return {
         "latitud": latitud,
         "longitud": longitud,
         "zona_horaria": data.get("timezone"),
-        "pronostico": pronostico_list,
+        "pronostico": [
+            {
+                "fecha": fechas[i],
+                "temp_max_c": tmax[i],
+                "temp_min_c": tmin[i],
+                "condicion": WMO_CODES.get(codigos[i], "Desconocido"),
+            }
+            for i in range(len(fechas))
+        ],
     }
